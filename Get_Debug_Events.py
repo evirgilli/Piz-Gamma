@@ -3,30 +3,14 @@ import matplotlib.pyplot as plt
 from time import gmtime, strftime
 from scipy.optimize import curve_fit
 
-from DPP_comm import Dfilter, DPP_Config, DPP_GetBG, DPP_GetTao, DPP_Set, DPP_GetRaw,  DPP_GetEvent, DPP_GetDebugEvents
+from DPP_comm import Dfilter, DPP_PreConfig, DPP_GetDebugEvents, FLAGS
 
-# DPP_GetTao()
-# DPP_GetBG()
+channel = FLAGS["FLAG_START_DBG_CHA"]  # _CHB_GOOD / _CHA / _CHB
 
-channel = 0 # - Channel A, 1 -channel B, 2  - both channels
- 
-_filterSiPM = Dfilter(peak_threshold=100, peak_rising_time_max=10, p2p_distance_min=15)
-_filterPMT = Dfilter(peak_threshold=50, peak_rising_time_max=5, p2p_distance_min=7)
+DPP_PreConfig('sipm')
 
 
 
-_filterSiPM = Dfilter(peak_threshold=50, peak_rising_time_max=10, p2p_distance_min=15)
-_filterPMT = Dfilter(peak_threshold=25, peak_rising_time_max=5, p2p_distance_min=7)
-
-# SIPM main config:
-# DPP_Config (duration=100,tao=8.5, filter = _filterSiPM, DAC_level=230, GND_offset=200, ramp_direction=1)
-
-# PMT main config
-DPP_Config (duration=100,tao=5.8, filter = _filterPMT, DAC_level=150, GND_offset=30, ramp_direction=0)
-
-
-# dummy SDD config
-# DPP_Config (FIR_BG_manual_A=170, FIR_BG_manual_B=170, use_manual_background=1, dynamic_background=0,duration=100, tao=11, peak_threshold=20, ramp_direction=0, use_dummy=1)
 
 
 def on_close(event):
