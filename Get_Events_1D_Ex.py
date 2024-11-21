@@ -11,12 +11,19 @@ import math
 
 from DPP_comm import ser, FLAGS, DPP_PreConfig, DPP_Send, DPP_GetBG, DPP_Unpack_Board, DPP_Stop
 
+DPP_Stop()  # Added this line to handle the fact that sometimes the board is not stopped properly and, in that case, doesn't initialize DPP_GetBG() correctly.
+time.sleep(0.5)
+if (ser.is_open == False):  ser.open()
+ser.reset_input_buffer()
+ser.reset_output_buffer()
+time.sleep(0.5) #Give the board a moment to settle.
+
 DPP_GetBG()
 
-filtered_region = DPP_PreConfig('sipm')
-# filtered_region = DPP_PreConfig('pmt')
+#filtered_region = DPP_PreConfig('sipm')
+filtered_region = DPP_PreConfig('PMT')
 
-max_duration = 4000
+max_duration = 1000
 
 channel = FLAGS["FLAG_START_RAWeX_CHA"] # _RAW2_ # _RAW_# _CHB # _All
 # channel = FLAGS["FLAG_START_RAW_CHA"] # _CHB # _All
@@ -75,9 +82,9 @@ Fluxes_heights = []
 Fluxes_heights_H = []
 
 # hist2ddata_x = []
-# events_parced_tot = []
+events_parced_tot = []
 # tot_registered_events = 0
-# fluxes = []
+fluxes = []
 do_replot = 1
 keep_updating_plot = 1
 pause_plot = 0
@@ -175,8 +182,8 @@ while(keep_updating_plot>0):
     print(DR_timestamp_us, flux_total, flux_x200ms_H[0:flux_total], flux_x200ms_F[0:flux_total])
     Events_first_index = len(Events_full)
 
-    # fluxes.append(flux_x200ms[0:flux_total])
-    # first_event_index = len(events_parced_tot)
+    fluxes.append(flux_x200ms_F[0:flux_total])
+    first_event_index = len(events_parced_tot)
 
     for i in range(total_events):
         Events_last_index = len(Events_full)
@@ -189,8 +196,8 @@ while(keep_updating_plot>0):
         ch    =  (bt34>>13) & 0b1
         h1    =  (bt34) & 0b1111111111111
 
-        # last_event_index = len(events_parced_tot)
-        # events_parced_tot.append([last_event_index, BASE_timestamp_ms, ts_us, ch, h1])
+        last_event_index = len(events_parced_tot)
+        events_parced_tot.append([last_event_index, BASE_timestamp_ms, ts_us, ch, h1])
         Events_full.append([last_event_index, BASE_timestamp_ms, ts_us, ch, h1])
         Events_heights.append(h1)
         # hist2ddata_x.append(h1)

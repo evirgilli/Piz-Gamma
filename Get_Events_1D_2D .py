@@ -13,9 +13,9 @@ from DPP_comm import ser, FLAGS, DPP_PreConfig, DPP_Send, DPP_GetBG, DPP_Unpack_
 # dpp.DPP_GetTao() 
 DPP_GetBG()
 
-DPP_PreConfig('sipm')
+#DPP_PreConfig('sipm')
 # filtered_region = DPP_PreConfig('sipm')
-# filtered_region = DPP_PreConfig('pmt')
+filtered_region = DPP_PreConfig('pmt')
 
 
 def Gauss(x, a, x0, sigma):

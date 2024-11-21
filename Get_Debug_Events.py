@@ -7,7 +7,7 @@ from DPP_comm import Dfilter, DPP_PreConfig, DPP_GetDebugEvents, FLAGS
 
 channel = FLAGS["FLAG_START_DBG_CHA"]  # _CHB_GOOD / _CHA / _CHB
 
-DPP_PreConfig('sipm')
+DPP_PreConfig('pmt')
 
 
 
