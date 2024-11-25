@@ -11,19 +11,12 @@ import math
 
 from DPP_comm import ser, FLAGS, DPP_PreConfig, DPP_Send, DPP_GetBG, DPP_Unpack_Board, DPP_Stop
 
-DPP_Stop()  # Added this line to handle the fact that sometimes the board is not stopped properly and, in that case, doesn't initialize DPP_GetBG() correctly.
-time.sleep(0.5)
-if (ser.is_open == False):  ser.open()
-ser.reset_input_buffer()
-ser.reset_output_buffer()
-time.sleep(0.5) #Give the board a moment to settle.
-
 DPP_GetBG()
 
 #filtered_region = DPP_PreConfig('sipm')
 filtered_region = DPP_PreConfig('PMT')
 
-max_duration = 1000
+max_duration = 1000 #This define the acquisition window in ms (in this case, every second on the terminal you will see a print of the number of events detected and related information)
 
 channel = FLAGS["FLAG_START_RAWeX_CHA"] # _RAW2_ # _RAW_# _CHB # _All
 # channel = FLAGS["FLAG_START_RAW_CHA"] # _CHB # _All
@@ -131,6 +124,9 @@ coincidence_window = 2  # max peaks offset, points.
 
 # Get the current date and time
 current_time = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+current_time2 = datetime.now()
+unix_start_time = current_time2.timestamp()  # Start time in Unix seconds
+
 # Construct the filename with the current time and date
 filenameEvents = f"{current_time}_Events.txt"
 filenameHist = f"{current_time}_hist.txt"
@@ -198,7 +194,10 @@ while(keep_updating_plot>0):
 
         last_event_index = len(events_parced_tot)
         events_parced_tot.append([last_event_index, BASE_timestamp_ms, ts_us, ch, h1])
-        Events_full.append([last_event_index, BASE_timestamp_ms, ts_us, ch, h1])
+        event_time_offset_s = BASE_timestamp_ms / 1000. + ts_us / 1000000.
+        event_unix_time = unix_start_time + event_time_offset_s #Added with the line above to obtain already a complete Unix timestamp of the event
+        #print(event_unix_time)
+        Events_full.append([last_event_index, BASE_timestamp_ms, ts_us, ch, h1, event_unix_time])
         Events_heights.append(h1)
         # hist2ddata_x.append(h1)
 
@@ -209,7 +208,8 @@ while(keep_updating_plot>0):
     if total_events>0:
         c = Events_full[first_event_index]
         d = Events_full[last_event_index]
-        b += "\t Event[" + str(last_event_index-first_event_index)+"] @ " + "8%d"%(d[1])  + "+"  +  "%.3f"%(d[2]/1000) + "ms, H= " +  "%4d"%(d[4]) + ";" 
+        print(d)
+        b += "\t Event[" + str(last_event_index-first_event_index)+"] @ " + "%8d"%(d[1])  + "+"  +  "%.3f"%(d[2]/1000) + "ms, H= " +  "%4d"%(d[4]) + ";" 
         b += " TX=+" + "%.3f"%((DR_timestamp_us-d[2]*0)/1000) +"ms "
     else:
         b += "\t [NO EVENTS]"
@@ -258,7 +258,8 @@ frq, edges = np.histogram(dat, range(0, 4096, 1))
 
 # np.savetxt(filenameEvents, dat, delimiter=',', fmt='%d')   # save all the events
 # np.savetxt(filenameHist, frq, fmt='%d')   # x,y,z equal sized 1D arrays
-np.savetxt(filenameFULL, Events_full, fmt='%d')   # x,y,z equal sized 1D arrays
+np.savetxt(filenameFULL, Events_full, fmt=' '.join(['%d']*4 + ['%.3f'] + ['%.6f']))   # x,y,z equal sized 1D arrays
+
 
 # Get a gaussian fit for the peak
 try:
@@ -272,6 +273,7 @@ except (RuntimeError, ValueError):
     HIST_FIT = [0]*len(edges[:-1])
     print('\nFit failed')
 
+#plt.ioff() #In case you want to keep the final plot on the screen, uncomment this line
 fig = plt.figure(figsize=(10, 5))
 ax1 = plt.subplot2grid((2, 2), (0, 0), rowspan=1)
 plot_max =  pow(10,math.floor(math.log10(max(frq))+1))

@@ -98,7 +98,7 @@ def DPP_PreConfig(type = 'sipm'):
     port = PORTS["USB"]
 
     filterSiPM = Dfilter(peak_threshold=40, peak_height_min=200, peak_rising_time_max=8, p2p_distance_min=15, use_syncrounous_events=False)
-    filterPMT  = Dfilter(peak_threshold=30, peak_height_min=50, peak_rising_time_max=7, p2p_distance_min=15, use_syncrounous_events=False)
+    filterPMT  = Dfilter(peak_threshold=50, peak_height_min=50, peak_rising_time_max=7, p2p_distance_min=15, use_syncrounous_events=False)
     filterSDD  = Dfilter(peak_threshold=25, peak_height_min=100, peak_rising_time_max=5, p2p_distance_min=7)
 
     filterGAGG = Dfilter(peak_threshold=25, peak_height_min=30, peak_rising_time_max=8, p2p_distance_min=15)
