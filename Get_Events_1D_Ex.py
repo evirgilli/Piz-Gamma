@@ -6,92 +6,80 @@ import keyboard
 from datetime import datetime
 from scipy.optimize import curve_fit
 import math
+from DPP_comm import ser, FLAGS, DPP_PreConfig, DPP_Send, DPP_GetBG, DPP_Unpack_Board, DPP_Stop
 # import threading as thrd
 
+# --- Initialization and Setup ---
+### Safely stop and reset the board in case of errors or improper state
+DPP_Stop() 
+time.sleep(0.5)
 
-from DPP_comm import ser, FLAGS, DPP_PreConfig, DPP_Send, DPP_GetBG, DPP_Unpack_Board, DPP_Stop
+if (ser.is_open == False):  ser.open()
+ser.reset_input_buffer()
+ser.reset_output_buffer()
+time.sleep(0.5) #Give the board a moment to settle.
+###
 
 DPP_GetBG()
-
 #filtered_region = DPP_PreConfig('sipm')
-filtered_region = DPP_PreConfig('PMT')
+filtered_region = DPP_PreConfig('PMT') # Set filtered region for PMT
 
-max_duration = 1000 #This define the acquisition window in ms (in this case, every second on the terminal you will see a print of the number of events detected and related information)
+# Acquisition window (ms) - adjust as needed
+max_duration = 1000
 
-channel = FLAGS["FLAG_START_RAWeX_CHA"] # _RAW2_ # _RAW_# _CHB # _All
+# Select data acquisition channel
+channel = FLAGS["FLAG_START_RAWeX_CHA"] # Alternatives: [# _RAW2_ ; # _RAW_# ; _CHB ; # _All] - See in DPP_comm.py
 # channel = FLAGS["FLAG_START_RAW_CHA"] # _CHB # _All
 
-# def UpdatePlots():
-#     global do_replot
-#     while (do_replot):
-#         plt.pause(0.1)
-
-
+# --- Helper Functions ---
 def Gauss(x, a, x0, sigma):
+    """Gaussian function for curve fitting."""
     return a * np.exp(-(x - x0)**2 / (2 * sigma**2))
 
 def on_close(event):
-    global keep_updating_plot
-    global pause_plot
-
+    """Handle plot window close event."""
+    global keep_updating_plot, pause_plot
     DPP_Stop()
-
     keep_updating_plot = 0
     pause_plot = 0
 
 def press(event):
-    global keep_updating_plot
-    global pause_plot
-    global log_plot
-    global axs
+    """Handle key press events."""
+    global keep_updating_plot, pause_plot, log_plot, axs
 
     if event.key == 'escape':
         keep_updating_plot = 0
         pause_plot = 0
-
-    # if event.key == ' ':
-    #     if (pause_plot == 0):
-    #         pause_plot = 1
-    #     else:
-    #         pause_plot = 0
-
-    if event.key == 'l':
-        if (log_plot == 0):
-            log_plot = 1
-            axs[0].set_yscale('log')
-            axs[1].set_yscale('linear')
-        else:
-            log_plot = 0
-            axs[0].set_yscale('linear')
-            axs[1].set_yscale('linear')
-Events_full = []
-Events_heights = []
+    elif event.key == 'l':
+        # Toggle log scale on plot
+        log_plot = not log_plot
+        scale = 'log' if log_plot else 'linear'
+        axs[0].set_yscale(scale)
+        axs[1].set_yscale('linear')
+            
+            
+# --- Variables and Plot Initialization ---
+# Initialize data buffers and states
+Events_full, Events_heights, events_parced_tot = [], [], []
+Fluxes_heights, Fluxes_heights_H, fluxes = [], [], []
+HIST_RESOLUTION = 4096
+HISTX = np.arange(HIST_RESOLUTION)
+HIST = [0] * HIST_RESOLUTION
+FULX, FULX_H = [0] * 10, [0] * 10
 
 Events_total = 0
 Events_first_index = 0
 Events_last_index = 0
 
-Fluxes_heights = []
-Fluxes_heights_H = []
-
 # hist2ddata_x = []
-events_parced_tot = []
 # tot_registered_events = 0
-fluxes = []
-do_replot = 1
+#do_replot = 1
+#pause_plot = 0
 keep_updating_plot = 1
-pause_plot = 0
 log_plot = 0
-plt.ion()  # turning interactive mode on
 
-HIST_RESOLUTION=4096
-
-HISTX = np.arange(HIST_RESOLUTION)
-HIST = [0]*HIST_RESOLUTION
-FULX = [0]*10
-FULX_H = [0]*10
-
-
+# Plot configuration
+plt.ion()  # Enable interactive mode
 fig = plt.figure()
 fig.canvas.manager.set_window_title('DPP Spectra')
 
@@ -119,31 +107,27 @@ plt.xlabel("Flux/200ms")
 
 plt.pause(0.25)
 
-coincidence_window = 2  # max peaks offset, points.
+#coincidence_window = 2  # max peaks offset, points.
 
 
-# Get the current date and time
+# --- File Initialization ---
 current_time = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-current_time2 = datetime.now()
-unix_start_time = current_time2.timestamp()  # Start time in Unix seconds
-
-# Construct the filename with the current time and date
-filenameEvents = f"{current_time}_Events.txt"
-filenameHist = f"{current_time}_hist.txt"
+#filenameEvents = f"{current_time}_Events.txt"
+#filenameHist = f"{current_time}_hist.txt"
 filenameFULL = f"{current_time}_Full.txt"
-
+#event_file = open(filenameEvents, 'w')
+#hist_file = open(filenameHist, 'w')
+full_file = open(filenameFULL, 'w')
 
 # thread = thrd.Thread(target=UpdatePlots, daemon=True)
 # thread.start()
 
-# start aquisition
+# --- Start aquisition ---
 DPP_Send(channel, max_duration, False)
+timeold = unix_start_time = file_start_time = time.time()
 
-# ser.write(bytearray([channel, 0x00, (max_duration>>8)&0xFF, (max_duration)&0xFF]))
-timeold = time.time()
-
-
-
+keep_updating_plot, log_plot = 1, 0
+last_written_index = 0 
 first_event_index = 0
 last_event_index = 0
 # untill ESC is pressed
@@ -152,6 +136,27 @@ while(keep_updating_plot>0):
 
     buf = ser.read(4096)
     timenew = time.time()
+    elapsed_time = time.time() - file_start_time
+    
+    ### Part of the script to save a new file every hour
+    if elapsed_time >= 30:  # One hour elapsed
+        file_start_time = time.time()  # Reset for the next hour
+
+        # Close current files
+        #event_file.close()
+        #hist_file.close()
+        full_file.close()
+
+        # Open new files with updated timestamps
+        current_time = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        #filenameEvents = f"{current_time}_Events.txt"
+        #filenameHist = f"{current_time}_hist.txt"
+        filenameFULL = f"{current_time}_Full.txt"
+
+        #event_file = open(filenameEvents, 'w')
+        #hist_file = open(filenameHist, 'w')
+        full_file = open(filenameFULL, 'w')
+    ### End of this addition
 
     # Parse incomming message
     board = DPP_Unpack_Board(buf[0:16])
@@ -244,12 +249,22 @@ while(keep_updating_plot>0):
     # do_replot = 1
 
     plt.pause(0.1)
+    
+    # Save data to files
+    for event in Events_full[last_written_index:]:
+        full_file.write(" ".join([f"{event[0]:d}", f"{event[1]:d}", f"{event[2]:d}", f"{event[3]:d}", f"{event[4]:.3f}", f"{event[5]:.6f}"]) + "\n")
+
+    
+    # Update the last written index
+    last_written_index = len(Events_full)
 
 
-
+# Final cleanup
+#event_file.close()
+#hist_file.close()
+full_file.close()
 
 DPP_Stop()
-
 
 # merge events to 1d histogram
 
@@ -258,7 +273,7 @@ frq, edges = np.histogram(dat, range(0, 4096, 1))
 
 # np.savetxt(filenameEvents, dat, delimiter=',', fmt='%d')   # save all the events
 # np.savetxt(filenameHist, frq, fmt='%d')   # x,y,z equal sized 1D arrays
-np.savetxt(filenameFULL, Events_full, fmt=' '.join(['%d']*4 + ['%.3f'] + ['%.6f']))   # x,y,z equal sized 1D arrays
+#np.savetxt(filenameFULL, Events_full, fmt=' '.join(['%d']*4 + ['%.3f'] + ['%.6f']))   # x,y,z equal sized 1D arrays
 
 
 # Get a gaussian fit for the peak
