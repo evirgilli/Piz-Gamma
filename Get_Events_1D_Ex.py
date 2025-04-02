@@ -17,7 +17,7 @@ time.sleep(0.5)
 if (ser.is_open == False):  ser.open()
 ser.reset_input_buffer()
 ser.reset_output_buffer()
-time.sleep(0.5) #Give the board a moment to settle.
+#time.sleep(0.5) #Give the board a moment to settle.
 ###
 
 DPP_GetBG()
@@ -124,7 +124,7 @@ full_file = open(filenameFULL, 'w')
 
 # --- Start aquisition ---
 DPP_Send(channel, max_duration, False)
-timeold = unix_start_time = file_start_time = time.time()
+timeold = file_start_time = time.time()
 
 keep_updating_plot, log_plot = 1, 0
 last_written_index = 0 
@@ -164,7 +164,7 @@ while(keep_updating_plot>0):
     total_events = buf[16] + (buf[17]<<8)
     total_rejected = buf[18] + (buf[19]<<8)
 
-    events = np.frombuffer(buf[20:20+800*5], dtype = np.uint8).reshape( 800, 5)
+    events = np.frombuffer(buf[20:20+total_events*5], dtype = np.uint8).reshape( total_events, 5)
 
     flux_x200ms_F= np.frombuffer(buf[4020:4020+23*2], np.uint16) #.byteswap()
     flux_x200ms_H= np.frombuffer(buf[4020+23*2:4020+23*3], np.uint8) #.byteswap()
@@ -180,11 +180,13 @@ while(keep_updating_plot>0):
     Fluxes_heights.extend(list(flux_x200ms_F[0:flux_total]))
     Fluxes_heights_H.extend(list(flux_x200ms_H[0:flux_total]))
     
-    print(DR_timestamp_us, flux_total, flux_x200ms_H[0:flux_total], flux_x200ms_F[0:flux_total])
+    #print(DR_timestamp_us, flux_total, flux_x200ms_H[0:flux_total], flux_x200ms_F[0:flux_total])
     Events_first_index = len(Events_full)
 
     fluxes.append(flux_x200ms_F[0:flux_total])
     first_event_index = len(events_parced_tot)
+    unix_start_time = time.time()
+    print(unix_start_time)
 
     for i in range(total_events):
         Events_last_index = len(Events_full)
@@ -199,9 +201,8 @@ while(keep_updating_plot>0):
 
         last_event_index = len(events_parced_tot)
         events_parced_tot.append([last_event_index, BASE_timestamp_ms, ts_us, ch, h1])
-        event_time_offset_s = BASE_timestamp_ms / 1000. + ts_us / 1000000.
-        event_unix_time = unix_start_time + event_time_offset_s #Added with the line above to obtain already a complete Unix timestamp of the event
-        #print(event_unix_time)
+        event_unix_time = unix_start_time + ts_us / 1e6 #Added with the line above to obtain already a complete Unix timestamp of the event
+        print(unix_start_time, ts_us, event_unix_time, DR_timestamp_us)
         Events_full.append([last_event_index, BASE_timestamp_ms, ts_us, ch, h1, event_unix_time])
         Events_heights.append(h1)
         # hist2ddata_x.append(h1)
@@ -317,4 +318,4 @@ plt.tight_layout()
 plt.subplots_adjust(hspace=0, wspace=0.1)  # Specifically remove vertical spacing
 plt.show()
 
-print("\nDONE!")
+print("\nDONE!", time.time())
