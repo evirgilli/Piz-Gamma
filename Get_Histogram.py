@@ -8,11 +8,10 @@ from DPP_comm import DPP_PreConfig, DPP_GetBG, DPP_GetTao, DPP_GetHist, DPP_Star
 
 # DPP_StopRepeatedHist()
 
-#filtered_region = DPP_PreConfig('sipm')
+# filtered_region = DPP_PreConfig('sipm')
 # filtered_region = DPP_PreConfig('sipm_plastic')
-# filtered_region = DPP_PreConfig('sipm_gagg')
+#filtered_region = DPP_PreConfig('sdd')
 filtered_region = DPP_PreConfig('pmt')
-print(filtered_region)
 
 step_duration = 1000
 

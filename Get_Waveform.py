@@ -11,10 +11,12 @@ from DPP_comm import DPP_PreConfig, DPP_GetBG, DPP_GetTao, DPP_GetWaveform, FLAG
 DPP_GetTao()
 DPP_GetBG()
 
-DPP_PreConfig('sipm')
+# DPP_PreConfig('sipm')
 # DPP_PreConfig('sipm_plastic')
 # DPP_PreConfig('sipm_gagg')
-# DPP_PreConfig('pmt')
+DPP_PreConfig('pmt')
+#DPP_PreConfig('sdd')
+
 
 
 def on_close(event):
@@ -131,7 +133,7 @@ while(keep_updating_plot>0):
         case 3:
             HISTX, HISTA, FILTA,  HISTB, FILTB, HISTC = DPP_GetWaveform(channel=FLAGS["FLAG_START_WAVEFORM_ALL"], max_duration=1000)
 
-    plt.subplot(3, 1, 1)
+    plt.subplot(3, 1, 1) 
     graph1.remove()
     graph2.remove()
     graph1 = plt.plot(HISTX, HISTA, '.',ms=4,color = 'g')[0]
@@ -145,12 +147,12 @@ while(keep_updating_plot>0):
     plt.subplot(3, 1, 3)
     graph3.remove()
     graph4.remove()
-    graph3 = plt.plot(HISTX, HISTB, '.',ms=4,color = 'b')[0]
-    graph4 = plt.plot(HISTX, FILTB, '.',ms=4,color = 'k')[0]
+    graph3 = plt.plot(HISTX, HISTB, '.-',ms=4,color = 'b')[0]
+    graph4 = plt.plot(HISTX, FILTB, '.-',ms=4,color = 'r')[0]
     
-    plt.pause(0.1)
+    plt.pause(0.9)
     while (pause_plot):
-        plt.pause(0.1)
+        plt.pause(0.9)
 
         
 # else:

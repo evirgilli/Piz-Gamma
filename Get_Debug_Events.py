@@ -1,12 +1,25 @@
 import numpy as np
 import matplotlib.pyplot as plt
+import time
 from time import gmtime, strftime
 from scipy.optimize import curve_fit
 
-from DPP_comm import Dfilter, DPP_PreConfig, DPP_GetDebugEvents, FLAGS
+from DPP_comm import Dfilter, DPP_PreConfig, DPP_GetDebugEvents, FLAGS, DPP_Stop, ser
 
-channel = FLAGS["FLAG_START_DBG_CHA"]  # _CHB_GOOD / _CHA / _CHB
+# --- Initialization and Setup ---
+### Safely stop and reset the board in case of errors or improper state
+DPP_Stop() 
+time.sleep(0.5)
 
+if (ser.is_open == False):  ser.open()
+ser.reset_input_buffer()
+ser.reset_output_buffer()
+#time.sleep(0.5) #Give the board a moment to settle.
+###
+
+channel = FLAGS["FLAG_START_DBG_CHA"]  # _CHB_GOOD / _CHA / _CHB (remember to set the correct channel!)
+
+# DPP_PreConfig('sipm')
 DPP_PreConfig('pmt')
 
 

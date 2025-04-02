@@ -54,6 +54,9 @@ FLAGS = {
 	# "FLAG_START_DBG_ALL_GOOD"	: 142,	#// 1000 1110
 
 	"FLAG_STOP"	 			    : 7,	#// 0000 0111
+    "FLAG_RESET" 			    : 5,	#// 0000 0101
+    "FLAG_BTL"   			    : 3,	#// 0000 0011
+
 }
 
 PORTS = {
@@ -62,18 +65,22 @@ PORTS = {
 	"UART": 2	    
 }
 
-# for cm in ['/dev/ttyS0','COM6','COM13','COM23','COM24','COM25','COM26','COM27','COM28','COM26']:
-    # try:
-        # ser = serial.Serial(cm, 115200, serial.EIGHTBITS, serial.PARITY_NONE, serial.STOPBITS_ONE)
-        # print('Connected ', cm)
-        # break
-    # except:
-        # # ports = serial.tools.list_ports.comports()
-        # # for port, desc, hwid in sorted(ports):
-        # #     print("{}: {} [{}]".format(port, desc, hwid))
-        # # print('NOT CONNECTED ',cm)
-        # # print(str(e))
-        # ser = None
+'''
+for cm in ['/dev/ttyS0','COM20','COM4','COM6','COM7','COM8','COM17','COM14','COM23','COM22','COM25','COM26','COM27','COM28','COM26']:
+    try:
+        ser = serial.Serial(cm, 115200, serial.EIGHTBITS, serial.PARITY_NONE, serial.STOPBITS_ONE)
+        print('Connected ', cm)
+        break
+    except:
+        # ports = serial.tools.list_ports.comports()
+        # for port, desc, hwid in sorted(ports):
+        #     print("{}: {} [{}]".format(port, desc, hwid))
+        # print('NOT CONNECTED ',cm)
+        # print(str(e))
+        ser = None
+'''
+
+# Optimized research of the correct serial port
 if not Serial_ports:
     print("No available ports found.")
     ser = None
@@ -91,22 +98,22 @@ else:
         ser = None
   else:
      print(f"Skipping port {port.device}: VID/PID not matching: {port.hwid} ")
-
+     
 
 def DPP_PreConfig(type = 'sipm'):
     filter = {}
     port = PORTS["USB"]
 
-    filterSiPM = Dfilter(peak_threshold=40, peak_height_min=200, peak_rising_time_max=8, p2p_distance_min=15, use_syncrounous_events=False)
-    filterPMT  = Dfilter(peak_threshold=100, peak_height_min=50, peak_rising_time_max=7, p2p_distance_min=15, use_syncrounous_events=False)
-    filterSDD  = Dfilter(peak_threshold=25, peak_height_min=100, peak_rising_time_max=5, p2p_distance_min=7)
+    filterSiPM = Dfilter(peak_threshold=40, peak_height_min=250, peak_rising_time_max=8, p2p_distance_min=15, use_syncrounous_events=False)
+    filterPMT  = Dfilter(peak_threshold=96, peak_height_min=96, peak_rising_time_max=7, p2p_distance_min=15, use_syncrounous_events=False)
+    filterSDD  = Dfilter(peak_threshold=15, peak_height_min=20, peak_rising_time_max=15, p2p_distance_min=50, use_syncrounous_events=False)
 
     filterGAGG = Dfilter(peak_threshold=25, peak_height_min=30, peak_rising_time_max=8, p2p_distance_min=15)
 
     # CsI scintillator or default for SiPM
     if (type.lower() == 'sipm_csi') or (type.lower() == 'sipm'):
         filter = filterSiPM
-        DPP_Config (duration=100,tao=12, filter = filter, DAC_level=222, GND_offset=220, ramp_direction=1, output_port=port, peak2_full_evo=False) #, use_manual_background=False, FIR_BG=[-1485,-1500], adjust_background=True)
+        DPP_Config (duration=100,tao=12, filter = filter, DAC_level=219, GND_offset=220, ramp_direction=1, output_port=port, peak2_full_evo=False) #, use_manual_background=False, FIR_BG=[-1485,-1500], adjust_background=True)
         
     
     # plastic scintillator 
@@ -116,7 +123,8 @@ def DPP_PreConfig(type = 'sipm'):
 
     if (type.lower() == 'pmt'):
         filter = filterPMT
-        DPP_Config (duration=100,tao=6.4  , filter = filterPMT, DAC_level=150, GND_offset=30, ramp_direction=0, output_port=port, adjust_background=False, use_manual_background=True, FIR_BG=[323,323])
+        # or 8 to cut long exp. or 4.5
+        DPP_Config (duration=100,tao=6.4, filter = filterPMT, DAC_level=150, GND_offset=30, ramp_direction=0, output_port=port, adjust_background=False, use_manual_background=True, FIR_BG=[323,323])
 
     if (type.lower() == 'test'):
         filter = filterSiPM
@@ -128,9 +136,9 @@ def DPP_PreConfig(type = 'sipm'):
         DPP_Config (duration=100,tao=11, filter = filterSiPM, DAC_level=240, GND_offset=220, ramp_direction=1, output_port=port)
 
     # GAGG scintillator 
-    if (type.lower() == 'sipm_gagg'):
+    if (type.lower() == 'sdd'):
         filter = filterGAGG
-        DPP_Config (duration=100, tao=8.5, filter = filterGAGG, DAC_level=218, GND_offset=220, ramp_direction=1, output_port=port) #, use_manual_background=True, FIR_BG=[-1480,-1480], adjust_background=False)
+        DPP_Config (duration=100, tao=8.5, filter = filterSDD, DAC_level=218, GND_offset=30, ramp_direction=0, output_port=port) #, use_manual_background=True, FIR_BG=[-1480,-1480], adjust_background=False)
 
 
     return [filter["peak_threshold"],filter["peak_height_min"]]
@@ -140,7 +148,7 @@ def DPP_PreConfig(type = 'sipm'):
 
 
 def Dfilter(peak_threshold = 50, peak_height_min = 00, bg_duration_min = 25, scan_step = 4, peak_rising_time_max = 10, p2p_distance_min = 15,
-               use_syncrounous_events = False, offset_correct_mode = 0, offset_min = 0, offset_max = 10000):
+               use_syncrounous_events = False, offset_correct_mode = False, offset_min = 0, offset_max = 10000):
     filter = {
         "peak_threshold": peak_threshold,
         "peak_height_min": peak_height_min,

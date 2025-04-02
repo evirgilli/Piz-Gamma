@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib import colors 
 import time
-import keyboard
+import signal
 from datetime import datetime
 from scipy.optimize import curve_fit
 import math
@@ -10,12 +10,26 @@ import math
 # import DPP_comm as dpp #import DPP_GetRawEvents, Dfilter, DPP_Config, DPP_GetBG, DPP_GetTao, DPP_Set, DPP_GetRaw, DPP_GetEvent, DPP_Unpack_Board, FLAGS, ser
 from DPP_comm import ser, FLAGS, DPP_PreConfig, DPP_Send, DPP_GetBG, DPP_Unpack_Board, DPP_Stop
 
+
+# --- Initialization and Setup ---
+### Safely stop and reset the board in case of errors or improper state
+DPP_Stop() 
+time.sleep(0.5)
+
+if (ser.is_open == False):  ser.open()
+ser.reset_input_buffer()
+ser.reset_output_buffer()
+#time.sleep(0.5) #Give the board a moment to settle.
+###
+
+
 # dpp.DPP_GetTao() 
 DPP_GetBG()
 
-#DPP_PreConfig('sipm')
+# DPP_PreConfig('sipm')
+DPP_PreConfig('pmt')
 # filtered_region = DPP_PreConfig('sipm')
-filtered_region = DPP_PreConfig('pmt')
+# filtered_region = DPP_PreConfig('pmt')
 
 
 def Gauss(x, a, x0, sigma):
@@ -23,8 +37,8 @@ def Gauss(x, a, x0, sigma):
 
 
 
-channel = FLAGS["FLAG_START_RAW2_CHA"] # _RAW2_ # _RAW_# _CHB # _All
-# channel = FLAGS["FLAG_START_RAW_CHA"] # _CHB # _All
+#channel = FLAGS["FLAG_START_RAW2_CHA"] # _RAW2_ # _RAW_# _CHB # _All
+channel = FLAGS["FLAG_START_RAW_CHA"] # _CHB # _All
 
 
 
@@ -63,8 +77,19 @@ hist2ddata_y = []
 events_parced_tot = []
 tot_registered_events = 0
 
+# Define a global variable to control the loop
+keep_running = True
+
+def signal_handler(sig, frame):
+    global keep_running
+    print("Stopping gracefully...")
+    keep_running = False
+
+# Register signal handler for SIGINT (CTRL+C)
+signal.signal(signal.SIGINT, signal_handler)
+
 # untill ESC is pressed
-while not keyboard.is_pressed('esc') and (tot_registered_events<acquisition_tot):
+while keep_running and (tot_registered_events<acquisition_tot):
 
     buf = ser.read(20 + 1024*4)
     timenew = time.time()

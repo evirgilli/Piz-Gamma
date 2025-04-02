@@ -1,0 +1,44 @@
+*** LOG TEST SOFTWARE PIZ GAMMA ***
+
+
+Per il corretto funzionamento del software:
+
+- Installare librerie pyserial/keyboard (pip install *nome pacchetto*)
+- Aggiornare Python alla versione 3.10 o superiore
+
+23/10/2024
+
+- Su Linux, la porta da aggiungere nella lista in DPP_comm.py è "/dev/ttyACM0"
+- Aggiungere l'utente al gruppo delle porte col comando: "usermod -aG [gruppo] [nomeutente]", dove gruppo = dialout nel nostro caso (dialout è il gruppo con cui si può avere permessi di accesso alle porte)
+- Se abbiamo un errore del tipo ser.open(), controllare i privilegi (vedi step sopra)
+
+12/11/2024
+
+- Comando per esaminare info del device USB: udevadm info --name=/dev/bus/usb/003/024 (--name è il percorso al device nel tuo laptop)
+- Aggiornato lo script "DPP_Comm.py" per cercare automaticamente il device giusto tra quelli connessi al PC
+
+21/11/2024
+
+Get_Events_1D_Ex.py: Ho decommentato fluxes (riga 87) e "fluxes.append(flux_x200ms_F[0:flux_total])" (riga 185), per evitare un errore dovuto alla riga 279 che tentava di inizializzare una variabile mai definita. Cosa analoga con first_event_index & last_event_index (riga 212) e variabili collegate, per ottenere il numero di evento corretto (da verificare se per i nostri scopi ci serve davvero, ma per il momento lo sto usando).
+
+22/11/2024
+
+- Max_duration rappresenta la finestra di acquisizione in millisecondi: ad esempio, settando max_duration=1000, lo script stamperà su terminale il numero di eventi rilevati secondo per secondo, con le relative informazioni generali.
+- Ad Events_full.append([last_event_index, BASE_timestamp_ms, ts_us, ch, h1]) viene aggiunta la colonna "event_unix_time", dove event_unix_time è calcolato nelle due righe precedenti e rappresenta lo Unix timestamp completo di data, ora, minuti e secondi (oltre alle frazioni di secondo ovviamente).
+
+
+25/11/2024
+
+- Aggiunta l'opzione plt.ioff() se si vuole disabilitare la finestra interattiva del plot per visualizzare correttamente quello finale con le informazioni globali su durata dell'acqusizione, spettro e flusso.
+
+27/11/2024
+
+- Aggiornata l'acquisizione in modo che salvi un nuovo file ogni tot tempo
+
+31/03/2025
+
+- Peso file di 10 minuti: circa 600 kB ---> Circa 100 MB al giorno
+
+02/04/2025
+
+- In "Get_Waveform.py" sul PC di GammaFlash, abbiamo commentato la parte di script che usa il comando "match" in quanto ha bisogno di Python 3.10, mentre su Oracle abbiamo Python 3.9. Per il momento preferisco non effettuare upgrade per evitare possibili conflitti con le pipeline di GammaFlash.

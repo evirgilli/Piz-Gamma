@@ -1,13 +1,17 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib import colors 
+import matplotlib.dates as md
+import matplotlib.gridspec as gridspec
 import time
+import datetime
 import keyboard
 from datetime import datetime
 from scipy.optimize import curve_fit
 import math
-from DPP_comm import ser, FLAGS, DPP_PreConfig, DPP_Send, DPP_GetBG, DPP_Unpack_Board, DPP_Stop
 # import threading as thrd
+
+from DPP_comm import ser, FLAGS, DPP_PreConfig, DPP_Send, DPP_GetBG, DPP_Unpack_Board, DPP_Stop
 
 # --- Initialization and Setup ---
 ### Safely stop and reset the board in case of errors or improper state
@@ -21,301 +25,291 @@ ser.reset_output_buffer()
 ###
 
 DPP_GetBG()
-#filtered_region = DPP_PreConfig('sipm')
-filtered_region = DPP_PreConfig('PMT') # Set filtered region for PMT
 
-# Acquisition window (ms) - adjust as needed
-max_duration = 1000
+# filtered_region = DPP_PreConfig('sipm')
+#filtered_region = DPP_PreConfig('sdd')
+filtered_region = DPP_PreConfig('pmt')
 
-# Select data acquisition channel
-channel = FLAGS["FLAG_START_RAWeX_CHA"] # Alternatives: [# _RAW2_ ; # _RAW_# ; _CHB ; # _All] - See in DPP_comm.py
-# channel = FLAGS["FLAG_START_RAW_CHA"] # _CHB # _All
+max_duration = 2000
+gain = 1460/600
 
-# --- Helper Functions ---
+channel = FLAGS["FLAG_START_RAWeX_CHA"] # _RAW2_ # _RAW_# _CHB # _All
+#channel = FLAGS["FLAG_START_RAW_CHA"] # _CHB # _All
+
+
 def Gauss(x, a, x0, sigma):
-    """Gaussian function for curve fitting."""
     return a * np.exp(-(x - x0)**2 / (2 * sigma**2))
 
 def on_close(event):
-    """Handle plot window close event."""
-    global keep_updating_plot, pause_plot
+    global keep_updating_plot
+    global pause_plot
+
     DPP_Stop()
+
     keep_updating_plot = 0
     pause_plot = 0
 
 def press(event):
-    """Handle key press events."""
-    global keep_updating_plot, pause_plot, log_plot, axs
+    global keep_updating_plot
+    global pause_plot
+    global log_plot
+    global axs
 
     if event.key == 'escape':
         keep_updating_plot = 0
         pause_plot = 0
-    elif event.key == 'l':
-        # Toggle log scale on plot
-        log_plot = not log_plot
-        scale = 'log' if log_plot else 'linear'
-        axs[0].set_yscale(scale)
-        axs[1].set_yscale('linear')
-            
-            
-# --- Variables and Plot Initialization ---
-# Initialize data buffers and states
-Events_full, Events_heights, events_parced_tot = [], [], []
-Fluxes_heights, Fluxes_heights_H, fluxes = [], [], []
-HIST_RESOLUTION = 4096
-HISTX = np.arange(HIST_RESOLUTION)
-HIST = [0] * HIST_RESOLUTION
-FULX, FULX_H = [0] * 10, [0] * 10
 
-Events_total = 0
-Events_first_index = 0
-Events_last_index = 0
+    if event.key == 'l':
+        if (log_plot == 0):
+            log_plot = 1
+            axs[0].set_yscale('log')
+            axs[1].set_yscale('linear')
+        else:
+            log_plot = 0
+            axs[0].set_yscale('linear')
+            axs[1].set_yscale('linear')
 
-# hist2ddata_x = []
-# tot_registered_events = 0
-#do_replot = 1
-#pause_plot = 0
+
+
+
+do_replot = 1
 keep_updating_plot = 1
+pause_plot = 0
 log_plot = 0
 
-# Plot configuration
-plt.ion()  # Enable interactive mode
+plt.ion()  # turning interactive mode on
+
+HIST_RESOLUTION=2048#4096
+
+HISTX = np.arange(HIST_RESOLUTION)
+HIST = [0]*HIST_RESOLUTION
+FULX = [0]*10
+FULX_H = [0]*10
+
+
 fig = plt.figure()
 fig.canvas.manager.set_window_title('DPP Spectra')
-
-gs = fig.add_gridspec( 1, 2, hspace=0, width_ratios = [1, 2] )
-axs = gs.subplots(sharex=False, sharey=False)
 
 fig.canvas.mpl_connect('key_press_event', press)
 fig.canvas.mpl_connect('close_event', on_close)
 
-plt.subplot(1, 2, 1)
-graph1 = plt.plot(HISTX, HIST,ms=4,scalex=False)[0]
-fr1a    = plt.axvspan(0, filtered_region[0]-1, alpha=0.2, color='r')
-fr1b    = plt.axvspan(filtered_region[0], filtered_region[1], alpha=0.2, color='g')
+# Define a GridSpec with 2 rows and 2 columns
+gs = gridspec.GridSpec( 2, 2, hspace=0, width_ratios = [1, 2] )
+# Add subplots to the grid
+axH1 = fig.add_subplot(gs[0, 0])  # First row, first column
+axH2 = fig.add_subplot(gs[1, 0], sharex=axH1)  # Second row, first column
+axF1 = fig.add_subplot(gs[0, 1])  # First row, second column
+axF2 = fig.add_subplot(gs[1, 1], sharex=axF1)  # Second row, second column
 
-txta = plt.text(HIST_RESOLUTION*0.75, 0, "a", ha='left')
-plt.xlabel("Spectrum")
 
-plt.subplot(1, 2, 2)
-graph2 = plt.plot(FULX,ms=4,scalex=False)[0]
-graph3 = plt.plot(FULX_H,ms=4,scalex=False)[0]
+graphH = axH1.plot(HISTX, HIST,ms=4,scalex=False)[0]
+fr1a   = axH1.axvspan(0, filtered_region[0]-1, alpha=0.2, color='r')
+fr1b   = axH1.axvspan(filtered_region[0], filtered_region[1], alpha=0.2, color='g')
+txta   = axH1.text(HIST_RESOLUTION*0.75, 0, "a", ha='left')
+axH1.set_xlabel("Spectrum 1min")
+
+graphHF= axH2.plot(HISTX, HIST,ms=4,scalex=False)[0]
+fr1a   = axH2.axvspan(0, filtered_region[0]-1, alpha=0.2, color='r')
+fr1b   = axH2.axvspan(filtered_region[0], filtered_region[1], alpha=0.2, color='g')
+txta   = axH2.text(HIST_RESOLUTION*0.75, 0, "a", ha='left')
+axH2.set_xlabel("Spectrum 1h")
+
+
+
+graphFT = axF1.plot(HIST,ms=4,scalex=False, label='Flux Total', marker='.',color = 'g')[0]
+graphFH = axF1.plot(HIST,ms=4,scalex=False, label='Flux HE', marker='.',color = 'r')[0]
+axF1.legend()
+axF1.xaxis.set_major_formatter(md.DateFormatter('%M:%S'))
+
+graphR  = axF2.plot(HIST,ms=4,scalex=False, label='Resistance', marker='.',color = 'b')[0]
+graphHV = axF2.plot(HIST,ms=4,scalex=False, label='Bias V', marker='.',color = 'm')[0]
+graphT  = axF2.plot(HIST,ms=4,scalex=False, label='Temp', marker='.',color = 'k')[0]
+axF2.legend()
+axF2.xaxis.set_major_formatter(md.DateFormatter('%M:%S'))
+
+
 
 # txtb = plt.text(HIST_RESOLUTION*0.75, 0, "a", ha='left')
-txtb = plt.text(0, 0, "a", ha='left')
-plt.xlabel("Flux/200ms")
+txtb = axF1.text(0, 0, "a", ha='left')
+axF1.set_xlabel("Flux(1/s) vs Analysis time(s)")
 
 plt.pause(0.25)
 
-#coincidence_window = 2  # max peaks offset, points.
+coincidence_window = 2  # max peaks offset, points.
 
 
-# --- File Initialization ---
+# Get the current date and time
 current_time = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-#filenameEvents = f"{current_time}_Events.txt"
-#filenameHist = f"{current_time}_hist.txt"
+# Construct the filename with the current time and date
+filenameEvents = f"{current_time}_Events.txt"
+filenameHist = f"{current_time}_hist.txt"
 filenameFULL = f"{current_time}_Full.txt"
-#event_file = open(filenameEvents, 'w')
-#hist_file = open(filenameHist, 'w')
-full_file = open(filenameFULL, 'w')
 
-# thread = thrd.Thread(target=UpdatePlots, daemon=True)
-# thread.start()
-
-# --- Start aquisition ---
+# start aquisition
 DPP_Send(channel, max_duration, False)
-timeold = file_start_time = time.time()
 
-keep_updating_plot, log_plot = 1, 0
-last_written_index = 0 
+# ser.write(bytearray([channel, 0x00, (max_duration>>8)&0xFF, (max_duration)&0xFF]))
+timeold = datetime.now()
+
+
+Global_hist_array = np.zeros((60,HIST_RESOLUTION))     # set of histograms by minutes
+Global_hist_index = 0                       # current index in the hist array
+Global_flux_array = np.empty((0, 9))        # global collection of flux values and ambiental conditions
+Global_event_array = np.empty((0,2))       # collection of events (optional)
+
 first_event_index = 0
 last_event_index = 0
+last_flux_ts = 0
+analysis_start_time = 0
+# payload_index = 0
 # untill ESC is pressed
 # while not keyboard.is_pressed('esc') and (tot_registered_events<acquisition_tot):
 while(keep_updating_plot>0):
 
     buf = ser.read(4096)
-    timenew = time.time()
-    elapsed_time = time.time() - file_start_time
+    timenew = datetime.now()
     
-    ### Part of the script to save a new file every hour
-    if elapsed_time >= 30:  # One hour elapsed
-        file_start_time = time.time()  # Reset for the next hour
-
-        # Close current files
-        #event_file.close()
-        #hist_file.close()
-        full_file.close()
-
-        # Open new files with updated timestamps
-        current_time = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-        #filenameEvents = f"{current_time}_Events.txt"
-        #filenameHist = f"{current_time}_hist.txt"
-        filenameFULL = f"{current_time}_Full.txt"
-
-        #event_file = open(filenameEvents, 'w')
-        #hist_file = open(filenameHist, 'w')
-        full_file = open(filenameFULL, 'w')
-    ### End of this addition
-
     # Parse incomming message
     board = DPP_Unpack_Board(buf[0:16])
     BASE_timestamp_ms = np.frombuffer(buf[0:4], np.uint32)[0]
+    # when the first payload arrive, set analysis start time
+    if (analysis_start_time == 0): 
+        analysis_start_time = BASE_timestamp_ms
+        last_flux_ts = BASE_timestamp_ms/1000
+
     total_events = buf[16] + (buf[17]<<8)
     total_rejected = buf[18] + (buf[19]<<8)
 
-    events = np.frombuffer(buf[20:20+total_events*5], dtype = np.uint8).reshape( total_events, 5)
+    # event array - 800events x 5 bytes
+    events = np.frombuffer(buf[20:20+800*5], dtype = np.uint8).reshape( 800, 5)
 
-    flux_x200ms_F= np.frombuffer(buf[4020:4020+23*2], np.uint16) #.byteswap()
-    flux_x200ms_H= np.frombuffer(buf[4020+23*2:4020+23*3], np.uint8) #.byteswap()
-    # flux_x200ms_H = [0] * len(flux_x200ms_F)    
+    # fluxes arrays - 23 fluxes x 2byte + 23 fluxes x 1byte
+    flux_x200ms_F= np.frombuffer(buf[4020:4020+23*2], np.uint16)
+    flux_x200ms_H= np.frombuffer(buf[4020+23*2:4020+23*3], np.uint8) 
 
-    flux_total = buf[4096-5] #+ (buf[4096-5]<<8)
-    DR_timestamp_us = np.frombuffer(buf[4096-4:4096], np.uint32)[0]
-    # parsing done
+    # number of filled fluxes
+    flux_total = buf[4096-7] 
+    # TS of the end of the first flux window
+    flux_timestamp_ms = BASE_timestamp_ms + np.frombuffer(buf[4096-6:4096-4], np.uint16)[0]
+    flux_timestamp_s = flux_timestamp_ms/1000
 
-    flux = total_events/(timenew-timeold)
+    # for SPI - TS of the data ready event in ms
+    DR_timestamp_ms = np.frombuffer(buf[4096-4:4096], np.uint32)[0]/1000
+    ### parsing done
+
+    # OPTIONAL 
+    flux_avg = total_events/(timenew-timeold).total_seconds()
+    flux_rej = total_rejected/(timenew-timeold).total_seconds()
     timeold = timenew
+    # Printout some statistics, Optional
+    b = "Tot: " + str(total_events) + "/" + str(flux_total) + " (" +str(total_rejected) + ") Load: " + str(board["cpu_load_ch1"]) + '/'+ str(board["cpu_load_ch2"]) + " Flux: " + str(round(flux_avg,3)) 
+    b+= "\tT=" + str(board["BME_Temperature"]/100) + "C, P=" + str(board["BME_Pressure"]) + "mB, RH=" + str(board["BME_Humidity"]) + "% "
+    b+= "\tST " + "%.3f"%(analysis_start_time/1000) + "s BTS:" +  "%.3f"%(BASE_timestamp_ms/1000-analysis_start_time/1000) + "s FTS " + "%d"%(flux_timestamp_ms-BASE_timestamp_ms) + "ms DRDY " + "%.3f"%(DR_timestamp_ms) +"ms "
 
-    Fluxes_heights.extend(list(flux_x200ms_F[0:flux_total]))
-    Fluxes_heights_H.extend(list(flux_x200ms_H[0:flux_total]))
-    
-    #print(DR_timestamp_us, flux_total, flux_x200ms_H[0:flux_total], flux_x200ms_F[0:flux_total])
-    Events_first_index = len(Events_full)
 
-    fluxes.append(flux_x200ms_F[0:flux_total])
-    first_event_index = len(events_parced_tot)
-    unix_start_time = time.time()
-    print(unix_start_time)
 
+    ### Start Fluxes part ###
+    # Add new fluxes to the main array
+    flux_tmp = np.empty((23, 9))
+    for i in range(flux_total):
+
+        _duration =  0.2 if i != 0 else flux_timestamp_s - last_flux_ts
+
+        fl_l = flux_x200ms_F[i]/_duration if _duration != 0 else 0
+        fl_h = flux_x200ms_H[i]/_duration if _duration != 0 else 0
+        
+        new_data = [(flux_timestamp_s + 0.2*i), fl_l, fl_h, board["ADC_R_thermistor"]/100, board["ADC_HV_value"]/1000, board["BME_Temperature"]/100, board["BME_Pressure"], board["BME_Humidity"], flux_rej]
+        flux_tmp[i,:] = new_data
+
+    last_flux_ts = flux_tmp[flux_total-1,0]
+
+    # add new fluxes to the global array
+    Global_flux_array = np.vstack((Global_flux_array, flux_tmp[:flux_total,:]))
+    ### End Fluxes part ###
+
+
+    ### Start Events part ###
+    old_hist_index = Global_hist_index
+    Global_hist_index = timenew.minute
+
+    # when new timeslot started
+    if (old_hist_index != Global_hist_index):
+        next_index = Global_hist_index+1
+        if next_index >= 60: next_index = 0
+        Global_hist_array[next_index,:] = 0
+
+
+    events_tmp = np.empty((total_events,2))
     for i in range(total_events):
-        Events_last_index = len(Events_full)
-        # timestamp 20bit, overflows at 1s
+        # timestamp 24bit, overflows at 16s
         bt02 = (events[i][0] << 16) + (events[i][1] << 8) + (events[i][2])
         bt34 = (events[i][3] <<  8) + (events[i][4] )
 
-        ts_us = (bt02)
+        ts_us =  (bt02)
         ts_ns =  (bt34>>14) & 0b11
         ch    =  (bt34>>13) & 0b1
         h1    =  (bt34) & 0b1111111111111
+        if h1>HIST_RESOLUTION-1: h1 = HIST_RESOLUTION-1
 
-        last_event_index = len(events_parced_tot)
-        events_parced_tot.append([last_event_index, BASE_timestamp_ms, ts_us, ch, h1])
-        event_unix_time = unix_start_time + ts_us / 1e6 #Added with the line above to obtain already a complete Unix timestamp of the event
-        print(unix_start_time, ts_us, event_unix_time, DR_timestamp_us)
-        Events_full.append([last_event_index, BASE_timestamp_ms, ts_us, ch, h1, event_unix_time])
-        Events_heights.append(h1)
-        # hist2ddata_x.append(h1)
+        events_tmp[i,0] = BASE_timestamp_ms+ts_us/1000-analysis_start_time
+        events_tmp[i,1] = h1
 
-    # Printout some statistics, Optional
-    b = "Tot: " + str(total_events) + " (" +str(total_rejected) + ") Load: " + str(board["cpu_load_ch1"]) + '/'+ str(board["cpu_load_ch2"]) + " Flux: " + str(round(flux,3)) 
-    b+= "\t T=" + str(board["BME_Temperature"]/100) + "C, P=" + str(board["BME_Pressure"]) + "mB, RH=" + str(board["BME_Humidity"]) + "% "
-    
+        # add new height into the global histogram array
+        Global_hist_array[Global_hist_index,h1] +=1
+    # Add all events with timestamps into global array
+    Global_event_array = np.vstack((Global_event_array, events_tmp))
+
+
+
+    # OPTIONAL PRINT
     if total_events>0:
-        c = Events_full[first_event_index]
-        d = Events_full[last_event_index]
-        print(d)
-        b += "\t Event[" + str(last_event_index-first_event_index)+"] @ " + "%8d"%(d[1])  + "+"  +  "%.3f"%(d[2]/1000) + "ms, H= " +  "%4d"%(d[4]) + ";" 
-        b += " TX=+" + "%.3f"%((DR_timestamp_us-d[2]*0)/1000) +"ms "
+        b += "\t Event[" + str(total_events)+"] @ " + "%5.3f"%(Global_event_array[-1,0]-BASE_timestamp_ms+analysis_start_time) + "ms, H= " +  "%4d"%(Global_event_array[-1,1]) + ";" 
     else:
         b += "\t [NO EVENTS]"
-    print(" ",len(Events_heights),'\t', b, end='\r')        
+    print(" ",len(Global_event_array),'\t', b) #, end='\r')        
     # End of printing
 
+
+
     # Update the plot 
-    # Update HIST
-    dat_new = np.copy(Events_heights).astype(int)
-    frq_new, edges_new = np.histogram(dat_new, range(0, HIST_RESOLUTION, 1))
+
+    graphH.set_data(HISTX[:-1], Global_hist_array[Global_hist_index,:-1])
+    axH1.relim()  
+    axH1.autoscale_view()
+
+    total_hist = np.sum(Global_hist_array, axis=0)
+    graphHF.set_data(HISTX[:-1], total_hist[:-1])
+    axH2.relim()  
+    axH2.autoscale_view()
+
+    time_axis = Global_flux_array[:,0] - analysis_start_time/1000.
+    graphFT.set_data(time_axis, Global_flux_array[:,1])
+    graphFH.set_data(time_axis, Global_flux_array[:,2])
+    graphR .set_data(time_axis, Global_flux_array[:,3])
+    graphHV.set_data(time_axis, Global_flux_array[:,4])
+    graphT .set_data(time_axis, Global_flux_array[:,5])
+
+    axF1.relim()  
+    axF1.autoscale_view()
+    axF1.legend()
+
+    axF2.relim()  
+    axF2.autoscale_view()
+    axF2.legend()
 
 
-    # thread.join()
-    # do_replot = 0
-    plt.subplot(1, 2, 1)
-    graph1.remove()
-    graph1 = plt.plot(edges_new[:-1], frq_new,ms=4,color = 'g')[0]
-    # plot(HISTX, HIST,ms=4,scalex=False)[0]
-    txta.remove()
-    txta = plt.text(HIST_RESOLUTION*0.75, 0, "a", ha='left')
-    
-    plt.subplot(1, 2, 2)
-    graph2.remove()
-    graph3.remove()
-    
-    txtb.remove()
-    graph2 = plt.plot(np.arange(len(Fluxes_heights))*0.2, Fluxes_heights,  '.-',color = 'g')[0]
-    graph3 = plt.plot(np.arange(len(Fluxes_heights_H))*0.2, Fluxes_heights_H,  '.-',color = 'r')[0]
-    a = 'Total Time: ' + "%.1f"%(len(Fluxes_heights)*0.2)  + "s, Points: " + "%d"%(len(Fluxes_heights))
-    txtb = plt.text(0, 0, a, ha='left')
-
-    # do_replot = 1
+    a = 'Total Time: ' + "%d"%((BASE_timestamp_ms-analysis_start_time)/1000)  + "s, Points: " + "%d"%(len(Global_flux_array))
+    txtb.set_text(a)
 
     plt.pause(0.1)
-    
-    # Save data to files
-    for event in Events_full[last_written_index:]:
-        full_file.write(" ".join([f"{event[0]:d}", f"{event[1]:d}", f"{event[2]:d}", f"{event[3]:d}", f"{event[4]:.3f}", f"{event[5]:.6f}"]) + "\n")
-
-    
-    # Update the last written index
-    last_written_index = len(Events_full)
 
 
-# Final cleanup
-#event_file.close()
-#hist_file.close()
-full_file.close()
+
 
 DPP_Stop()
 
-# merge events to 1d histogram
+#np.savetxt(filenameEvents, dat, delimiter=',', fmt='%d')   # save all the events
+#np.savetxt(filenameHist, frq, fmt='%d')   # x,y,z equal sized 1D arrays
+np.savetxt(filenameFULL, Global_event_array, fmt='%d')   # x,y,z equal sized 1D arrays
 
-dat = np.copy(Events_heights).astype(int)
-frq, edges = np.histogram(dat, range(0, 4096, 1))
-
-# np.savetxt(filenameEvents, dat, delimiter=',', fmt='%d')   # save all the events
-# np.savetxt(filenameHist, frq, fmt='%d')   # x,y,z equal sized 1D arrays
-#np.savetxt(filenameFULL, Events_full, fmt=' '.join(['%d']*4 + ['%.3f'] + ['%.6f']))   # x,y,z equal sized 1D arrays
-
-
-# Get a gaussian fit for the peak
-try:
-    peak_C = np.argmax(frq)
-    peak_w = 200
-    popt0, pcov0 = curve_fit(Gauss, edges[peak_C-peak_w:peak_C+peak_w], frq[peak_C-peak_w:peak_C+peak_w],  p0=[np.max(frq)/2., peak_C, 20.])
-    HIST_FIT = Gauss(edges[:-1], popt0[0],popt0[1],popt0[2])
-    np.set_printoptions(precision=3)
-    print("\nFit:", popt0, round(popt0[2]/popt0[1]*100,2), peak_C)
-except (RuntimeError, ValueError):
-    HIST_FIT = [0]*len(edges[:-1])
-    print('\nFit failed')
-
-#plt.ioff() #In case you want to keep the final plot on the screen, uncomment this line
-fig = plt.figure(figsize=(10, 5))
-ax1 = plt.subplot2grid((2, 2), (0, 0), rowspan=1)
-plot_max =  pow(10,math.floor(math.log10(max(frq))+1))
-
-fluxes = np.concatenate( fluxes, axis=0 )
-
-
-ax1.plot(edges[:-1], frq,ms=4)
-ax1.plot(edges[:-1], HIST_FIT,'-')
-ax1.set_yscale('log')
-ax1.set_xlim(0, 4000)
-ax1.set_ylim(1, plot_max )  # Set only the lower limit
-ax1.get_xaxis().set_visible(False)
-
-ax2 = plt.subplot2grid((2, 2), (1, 0), sharex=ax1)
-ax2.plot(edges[:-1], frq,ms=4)
-ax2.plot(edges[:-1], HIST_FIT,'-')
-ax2.set_ylim(bottom=0)  # Set only the lower limit
-
-ax3 = plt.subplot2grid((2, 2), (0, 1), rowspan=2)
-ax3.plot(np.arange(len(fluxes))*0.2, fluxes,  '.-',color = 'g')
-ax3.set_title('Total Time: ' + "%.1f"%(len(fluxes)*0.2)  + "s, Points: " + "%d"%(len(fluxes)))
-ax3.set_ylim(bottom=0)  # Set only the lower limit
-
-plt.tight_layout()
-plt.subplots_adjust(hspace=0, wspace=0.1)  # Specifically remove vertical spacing
-plt.show()
-
-print("\nDONE!", time.time())
+print("\nDONE!")
